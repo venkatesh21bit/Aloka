@@ -1,11 +1,54 @@
 import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
 import { z } from 'zod';
 import { Sanitizer } from '@omnitrace/sanitizer';
+import axios from 'axios';
 
 @Injectable()
 export class IssueService {
+  private getAuthHeader() {
+    const email = process.env.JIRA_EMAIL;
+    const token = process.env.JIRA_API_TOKEN;
+    if (!email || !token) throw new Error("Missing Jira credentials");
+    return `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
+  }
+
   public async createOrUpdate(project: string, title: string, desc: string, priority?: string, traceId?: string): Promise<string> {
-    return Sanitizer.scrub(`Issue created/updated in ${project}: [${priority || 'P2'}] ${title}. Trace: ${traceId}`);
+    try {
+      const baseUrl = process.env.JIRA_URL;
+      if (!baseUrl) throw new Error("Missing JIRA_URL");
+
+      // Simple implementation: Create new Jira issue. 
+      // (Updating requires searching for an existing issue first, skipped for brevity)
+      const priorityMap: Record<string, string> = {
+        'P0': 'Highest',
+        'P1': 'High',
+        'P2': 'Medium'
+      };
+
+      let descriptionText = desc;
+      if (traceId) {
+        descriptionText += `\n\nTrace ID: ${traceId}`;
+      }
+
+      const response = await axios.post(`${baseUrl}/rest/api/2/issue`, {
+        fields: {
+          project: { key: project },
+          summary: title,
+          description: descriptionText,
+          issuetype: { name: 'Bug' },
+          // priority: { name: priority ? priorityMap[priority] : 'Medium' } // Assuming default Jira priorities
+        }
+      }, {
+        headers: {
+          'Authorization': this.getAuthHeader(),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return Sanitizer.scrub(`[SUCCESS] Jira Issue Created: ${response.data.key}`);
+    } catch (e: any) {
+      return `[ERROR] Jira API failed: ${e.response?.data?.errorMessages?.join(', ') || e.message}`;
+    }
   }
 }
 
@@ -15,7 +58,7 @@ export class IssueServer {
 
   @Tool({
     name: 'create_or_update_issue',
-    description: 'Create or update issue ticket in Linear/Jira',
+    description: 'Create or update issue ticket in Jira',
     schema: z.object({
       project_key: z.string(),
       title: z.string(),

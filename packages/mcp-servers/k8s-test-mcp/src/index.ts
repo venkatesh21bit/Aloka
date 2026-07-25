@@ -1,15 +1,54 @@
 import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
 import { z } from 'zod';
 import { Sanitizer } from '@omnitrace/sanitizer';
+import axios from 'axios';
 
 @Injectable()
 export class K8sTestService {
+  private get baseUrl() {
+    const url = process.env.TESTKUBE_URL;
+    if (!url) throw new Error("Missing TESTKUBE_URL environment variable");
+    return url;
+  }
+
+  private get authHeaders() {
+    const token = process.env.TESTKUBE_API_TOKEN;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
   public async runSuite(suite: string, diff: string, ns: string): Promise<string> {
-    return Sanitizer.scrub(`Started test suite ${suite} in ${ns} with patch: ${diff}`);
+    try {
+      // Trigger a Testkube Test Suite Execution
+      const response = await axios.post(`${this.baseUrl}/v1/testsuites/${suite}/executions`, {
+        namespace: ns,
+        variables: {
+          PATCH_DIFF: {
+            name: "PATCH_DIFF",
+            value: diff,
+            type: "basic"
+          }
+        }
+      }, {
+        headers: this.authHeaders
+      });
+
+      return Sanitizer.scrub(`[SUCCESS] Started test suite execution. Run ID: ${response.data.id}`);
+    } catch (e: any) {
+      return `[ERROR] Testkube API failed to run suite: ${e.message}`;
+    }
   }
 
   public async getStatus(runId: string): Promise<string> {
-    return Sanitizer.scrub(`Test run ${runId}: PASSED`);
+    try {
+      const response = await axios.get(`${this.baseUrl}/v1/testsuite-executions/${runId}`, {
+        headers: this.authHeaders
+      });
+
+      // Status could be passed, failed, running, queued, etc.
+      return Sanitizer.scrub(`Test run ${runId}: ${response.data.status}`);
+    } catch (e: any) {
+      return `[ERROR] Testkube API failed to get status: ${e.message}`;
+    }
   }
 }
 

@@ -1,16 +1,74 @@
 import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
 import { z } from 'zod';
 import { Sanitizer } from '@omnitrace/sanitizer';
+import { WebClient } from '@slack/web-api';
 
 @Injectable()
 export class SlackService {
-  public async postAlert(channelId: string, summary: string, diff: string, traceUrl?: string, actions?: string[]): Promise<string> {
-    const msg = `Posted alert to ${channelId}. Summary: ${summary}. Actions: ${actions?.join(',')}`;
-    return Sanitizer.scrub(msg);
+  private client: WebClient;
+
+  constructor() {
+    this.client = new WebClient(process.env.SLACK_BOT_TOKEN);
   }
 
-  public async updateMessage(threadId: string, update: string): Promise<string> {
-    return Sanitizer.scrub(`Updated thread ${threadId}: ${update}`);
+  public async postAlert(channelId: string, summary: string, diff: string, traceUrl?: string, actions?: string[]): Promise<string> {
+    try {
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: "🚨 Build Failure Detected" }
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `*RCA Summary:*\n${summary}` }
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `*Suggested Patch:*\n\`\`\`diff\n${diff}\n\`\`\`` }
+        }
+      ];
+
+      if (traceUrl) {
+        blocks.push({
+          type: "section",
+          text: { type: "mrkdwn", text: `<${traceUrl}|View Distributed Trace>` }
+        });
+      }
+
+      if (actions && actions.length > 0) {
+        blocks.push({
+          type: "actions",
+          elements: actions.map(a => ({
+            type: "button",
+            text: { type: "plain_text", text: a },
+            value: a
+          }))
+        });
+      }
+
+      const res = await this.client.chat.postMessage({
+        channel: channelId,
+        text: "Build Failure Detected",
+        blocks
+      });
+
+      return Sanitizer.scrub(`[SUCCESS] Message posted in ${channelId}. Thread ID: ${res.ts}`);
+    } catch (e: any) {
+      return `[ERROR] Slack API Error: ${e.message}`;
+    }
+  }
+
+  public async updateMessage(channelId: string, threadTs: string, update: string): Promise<string> {
+    try {
+      await this.client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: update
+      });
+      return Sanitizer.scrub(`[SUCCESS] Thread ${threadTs} updated.`);
+    } catch (e: any) {
+      return `[ERROR] Slack API Error: ${e.message}`;
+    }
   }
 }
 
@@ -37,12 +95,13 @@ export class SlackServer {
     name: 'update_thread_message',
     description: 'Appends progress updates to an ongoing incident thread',
     schema: z.object({
-      thread_id: z.string(),
+      channel_id: z.string(),
+      thread_ts: z.string(),
       update_text: z.string()
     })
   })
-  async updateThreadMessage(args: { thread_id: string, update_text: string }) {
-    return await this.slackService.updateMessage(args.thread_id, args.update_text);
+  async updateThreadMessage(args: { channel_id: string, thread_ts: string, update_text: string }) {
+    return await this.slackService.updateMessage(args.channel_id, args.thread_ts, args.update_text);
   }
 }
 

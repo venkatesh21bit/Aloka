@@ -1,31 +1,66 @@
 import { Module, Tool, Resource, Injectable, NitroStack } from '@nitrostack/core';
 import { z } from 'zod';
 import { Sanitizer } from '@omnitrace/sanitizer';
+import { Octokit } from '@octokit/rest';
 
 @Injectable()
 export class CIService {
-  public async fetchFailedJobLogs(jobId: string, tailLines: number, filter?: string): Promise<string> {
-    // Mock implementation for hackathon
-    let rawLogs = `[INFO] Starting job ${jobId}\n[ERROR] Step failed with exit code 1\n[ERROR] NullPointerException in payment-service\n[INFO] Job finished`;
-    if (filter) {
-      rawLogs = rawLogs.split('\n').filter(l => l.includes(filter)).join('\n');
+  private octokit: Octokit;
+
+  constructor() {
+    this.octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  }
+
+  public async fetchFailedJobLogs(owner: string, repo: string, jobId: string, tailLines: number, filter?: string): Promise<string> {
+    try {
+      const response = await this.octokit.actions.downloadJobLogsForWorkflowRun({
+        owner,
+        repo,
+        job_id: parseInt(jobId, 10),
+      });
+      let rawLogs = response.data as string;
+      if (filter) {
+        rawLogs = rawLogs.split('\n').filter(l => l.includes(filter)).join('\n');
+      }
+      const lines = rawLogs.split('\n');
+      const logs = lines.slice(Math.max(lines.length - tailLines, 0)).join('\n');
+      return Sanitizer.scrub(logs);
+    } catch (error: any) {
+      return `[ERROR] Failed to fetch logs for job ${jobId}: ${error.message}`;
     }
-    const lines = rawLogs.split('\n');
-    const logs = lines.slice(Math.max(lines.length - tailLines, 0)).join('\n');
-    return Sanitizer.scrub(logs);
   }
 
-  public async fetchPipelineContext(runId: string): Promise<string> {
-    return Sanitizer.scrub(JSON.stringify({
-      run_id: runId,
-      commit_sha: 'a1b2c3d4',
-      author: 'dev@company.com',
-      failing_job_id: 'job_456'
-    }));
+  public async fetchPipelineContext(owner: string, repo: string, runId: string): Promise<string> {
+    try {
+      const response = await this.octokit.actions.getWorkflowRun({
+        owner,
+        repo,
+        run_id: parseInt(runId, 10),
+      });
+      return Sanitizer.scrub(JSON.stringify({
+        run_id: response.data.id,
+        commit_sha: response.data.head_sha,
+        author: response.data.head_commit?.author?.email || 'unknown',
+        status: response.data.status,
+        conclusion: response.data.conclusion,
+      }));
+    } catch (error: any) {
+      return `[ERROR] Failed to fetch pipeline context for run ${runId}: ${error.message}`;
+    }
   }
 
-  public async fetchRawLogs(runId: string): Promise<string> {
-    return Sanitizer.scrub(`Raw logs for pipeline ${runId}: ...`);
+  public async fetchRawLogs(owner: string, repo: string, runId: string): Promise<string> {
+    try {
+      const response = await this.octokit.actions.downloadWorkflowRunLogs({
+        owner,
+        repo,
+        run_id: parseInt(runId, 10),
+      });
+      // The endpoint returns a zip file of all logs, we might just return a summary or link for resources
+      return Sanitizer.scrub(`[NOTE] Raw logs downloaded for pipeline ${runId}. (Zip archive returned by GitHub API)`);
+    } catch (error: any) {
+      return `[ERROR] Failed to fetch raw logs for run ${runId}: ${error.message}`;
+    }
   }
 }
 
@@ -39,32 +74,34 @@ export class CIServer {
     name: 'get_failed_job_logs',
     description: 'Fetch log output for a failed CI job run',
     schema: z.object({
+      owner: z.string(),
+      repo: z.string(),
       job_id: z.string(),
       tail_lines: z.number().default(200),
       step_filter: z.string().optional()
     })
   })
-  async getFailedJobLogs(args: { job_id: string, tail_lines: number, step_filter?: string }) {
-    const logs = await this.ciService.fetchFailedJobLogs(args.job_id, args.tail_lines, args.step_filter);
+  async getFailedJobLogs(args: { owner: string, repo: string, job_id: string, tail_lines: number, step_filter?: string }) {
+    const logs = await this.ciService.fetchFailedJobLogs(args.owner, args.repo, args.job_id, args.tail_lines, args.step_filter);
     return logs.length > 4000 ? logs.substring(0, 4000) : logs;
   }
 
   @Tool({
     name: 'get_pipeline_context',
     description: 'Returns metadata associated with the build failure',
-    schema: z.object({ run_id: z.string() })
+    schema: z.object({ owner: z.string(), repo: z.string(), run_id: z.string() })
   })
-  async getPipelineContext(args: { run_id: string }) {
-    return await this.ciService.fetchPipelineContext(args.run_id);
+  async getPipelineContext(args: { owner: string, repo: string, run_id: string }) {
+    return await this.ciService.fetchPipelineContext(args.owner, args.repo, args.run_id);
   }
 
   @Resource({
-    uri: 'ci://pipeline/{run_id}/raw-logs',
+    uri: 'ci://{owner}/{repo}/pipeline/{run_id}/raw-logs',
     description: 'Read-only stream containing unredacted raw build logs'
   })
-  async getRawLogs(uri: string, params: { run_id: string }) {
+  async getRawLogs(uri: string, params: { owner: string, repo: string, run_id: string }) {
     return {
-      contents: [{ uri, text: await this.ciService.fetchRawLogs(params.run_id) }]
+      contents: [{ uri, text: await this.ciService.fetchRawLogs(params.owner, params.repo, params.run_id) }]
     };
   }
 }
