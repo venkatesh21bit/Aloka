@@ -1,5 +1,4 @@
-import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import { WebClient } from '@slack/web-api';
 
@@ -13,7 +12,7 @@ export class SlackService {
 
   public async postAlert(channelId: string, summary: string, diff: string, traceUrl?: string, actions?: string[]): Promise<string> {
     try {
-      const blocks = [
+      const blocks: any[] = [
         {
           type: "header",
           text: { type: "plain_text", text: "🚨 Build Failure Detected" }
@@ -72,14 +71,25 @@ export class SlackService {
   }
 }
 
-@Module({ providers: [SlackService] })
+@McpApp({ module: SlackServer, server: { name: 'slack-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'slack', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [SlackService] 
+})
 export class SlackServer {
   constructor(private readonly slackService: SlackService) {}
 
   @Tool({
     name: 'post_interactive_alert',
     description: 'Post interactive incident response card to Slack',
-    schema: z.object({
+    inputSchema: z.object({
       channel_id: z.string(),
       rca_summary: z.string(),
       diff_patch: z.string(),
@@ -94,7 +104,7 @@ export class SlackServer {
   @Tool({
     name: 'update_thread_message',
     description: 'Appends progress updates to an ongoing incident thread',
-    schema: z.object({
+    inputSchema: z.object({
       channel_id: z.string(),
       thread_ts: z.string(),
       update_text: z.string()
@@ -105,4 +115,8 @@ export class SlackServer {
   }
 }
 
-NitroStack.start(SlackServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(SlackServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

@@ -1,5 +1,4 @@
-import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import axios from 'axios';
 
@@ -52,14 +51,25 @@ export class K8sTestService {
   }
 }
 
-@Module({ providers: [K8sTestService] })
+@McpApp({ module: K8sTestServer, server: { name: 'k8s-test-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'k8s-test', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [K8sTestService] 
+})
 export class K8sTestServer {
   constructor(private readonly k8sTestService: K8sTestService) {}
 
   @Tool({
     name: 'run_ephemeral_test_suite',
     description: 'Execute targeted integration tests in an ephemeral K8s pod',
-    schema: z.object({
+    inputSchema: z.object({
       suite_name: z.string(),
       patch_diff: z.string(),
       target_namespace: z.string().default('omnitrace-sandbox')
@@ -72,11 +82,15 @@ export class K8sTestServer {
   @Tool({
     name: 'get_test_execution_status',
     description: 'Polls running Testkube execution status',
-    schema: z.object({ run_id: z.string() })
+    inputSchema: z.object({ run_id: z.string() })
   })
   async getTestExecutionStatus(args: { run_id: string }) {
     return await this.k8sTestService.getStatus(args.run_id);
   }
 }
 
-NitroStack.start(K8sTestServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(K8sTestServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

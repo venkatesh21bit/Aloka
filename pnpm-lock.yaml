@@ -43,13 +43,16 @@ importers:
     dependencies:
       '@nitrostack/core':
         specifier: ^1.0.14
-        version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))
+        version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76))
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       playwright:
         specifier: ^1.62.0
         version: 1.62.0
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/mcp-servers/ci-mcp:
     dependencies:
@@ -59,6 +62,9 @@ importers:
       '@octokit/rest':
         specifier: ^22.0.1
         version: 22.0.1
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -71,6 +77,9 @@ importers:
       '@octokit/rest':
         specifier: ^22.0.1
         version: 22.0.1
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -80,6 +89,9 @@ importers:
       '@nitrostack/core':
         specifier: ^1.0.14
         version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       axios:
         specifier: ^1.18.1
         version: 1.18.1
@@ -92,6 +104,9 @@ importers:
       '@nitrostack/core':
         specifier: ^1.0.14
         version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       axios:
         specifier: ^1.18.1
         version: 1.18.1
@@ -104,6 +119,9 @@ importers:
       '@nitrostack/core':
         specifier: ^1.0.14
         version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       axios:
         specifier: ^1.18.1
         version: 1.18.1
@@ -116,6 +134,9 @@ importers:
       '@nitrostack/core':
         specifier: ^1.0.14
         version: 1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))
+      '@omnitrace/sanitizer':
+        specifier: workspace:*
+        version: link:../../shared/sanitizer
       '@slack/web-api':
         specifier: ^8.0.0
         version: 8.0.0
@@ -1413,6 +1434,12 @@ snapshots:
 
   '@langchain/protocol@0.0.18': {}
 
+  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@standard-schema/spec': 1.1.0
+      zod: 3.25.76
+
   '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -1466,6 +1493,28 @@ snapshots:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
+
+  '@nitrostack/core@1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76))':
+    dependencies:
+      '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      bcryptjs: 2.4.3
+      cors: 2.8.6
+      dotenv: 17.4.2
+      express: 4.22.2
+      jose: 6.2.4
+      jsonwebtoken: 9.0.3
+      reflect-metadata: 0.2.2
+      uuid: 11.1.1
+      winston: 3.19.0
+      ws: 8.21.1
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   '@nitrostack/core@1.0.14(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3))':
     dependencies:

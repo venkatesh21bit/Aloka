@@ -1,5 +1,4 @@
-import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import { Octokit } from '@octokit/rest';
 
@@ -82,14 +81,25 @@ export class GitService {
   }
 }
 
-@Module({ providers: [GitService] })
+@McpApp({ module: GitServer, server: { name: 'git-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'git', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [GitService] 
+})
 export class GitServer {
   constructor(private readonly gitService: GitService) {}
 
   @Tool({
     name: 'read_file_at_commit',
     description: 'Fetches exact file contents at a given commit SHA',
-    schema: z.object({ repo: z.string(), commit: z.string(), path: z.string() })
+    inputSchema: z.object({ repo: z.string(), commit: z.string(), path: z.string() })
   })
   async readFileAtCommit(args: { repo: string, commit: string, path: string }) {
     return await this.gitService.readFile(args.repo, args.commit, args.path);
@@ -98,7 +108,7 @@ export class GitServer {
   @Tool({
     name: 'create_branch_and_pr',
     description: 'Stage fix, create branch, and open Pull Request',
-    schema: z.object({
+    inputSchema: z.object({
       repo_slug: z.string(),
       base_branch: z.string().default('main'),
       new_branch: z.string(),
@@ -112,4 +122,8 @@ export class GitServer {
   }
 }
 
-NitroStack.start(GitServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(GitServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

@@ -1,5 +1,4 @@
-import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import { chromium } from 'playwright';
 
@@ -50,14 +49,25 @@ export class BrowserService {
   }
 }
 
-@Module({ providers: [BrowserService] })
+@McpApp({ module: BrowserServer, server: { name: 'browser-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'browser', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [BrowserService] 
+})
 export class BrowserServer {
   constructor(private readonly browserService: BrowserService) {}
 
   @Tool({
     name: 'capture_viewport_screenshot',
     description: 'Replays user steps on a target route, takes a screenshot',
-    schema: z.object({ url: z.string().url() })
+    inputSchema: z.object({ url: z.string().url() })
   })
   async captureViewportScreenshot(args: { url: string }) {
     return await this.browserService.captureScreenshot(args.url);
@@ -66,7 +76,7 @@ export class BrowserServer {
   @Tool({
     name: 'inspect_dom_element',
     description: 'Inspect DOM node attributes and console errors at failure URL',
-    schema: z.object({
+    inputSchema: z.object({
       url: z.string().url(),
       css_selector: z.string().optional(),
       capture_console_errors: z.boolean().default(true)
@@ -78,4 +88,8 @@ export class BrowserServer {
   }
 }
 
-NitroStack.start(BrowserServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(BrowserServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

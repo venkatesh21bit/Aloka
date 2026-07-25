@@ -1,13 +1,16 @@
 {
   "name": "@omnitrace/browser-mcp",
   "version": "1.0.0",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@nitrostack/core": "^1.0.14",
     "playwright": "^1.62.0",
-    "zod": "^4.4.3"
+    "zod": "^3.24.1",
+    "@omnitrace/sanitizer": "workspace:*"
   }
 }

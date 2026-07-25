@@ -1,5 +1,4 @@
-import { Module, Tool, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import axios from 'axios';
 
@@ -52,14 +51,25 @@ export class IssueService {
   }
 }
 
-@Module({ providers: [IssueService] })
+@McpApp({ module: IssueServer, server: { name: 'issue-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'issue', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [IssueService] 
+})
 export class IssueServer {
   constructor(private readonly issueService: IssueService) {}
 
   @Tool({
     name: 'create_or_update_issue',
     description: 'Create or update issue ticket in Jira',
-    schema: z.object({
+    inputSchema: z.object({
       project_key: z.string(),
       title: z.string(),
       description: z.string(),
@@ -72,4 +82,8 @@ export class IssueServer {
   }
 }
 
-NitroStack.start(IssueServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(IssueServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

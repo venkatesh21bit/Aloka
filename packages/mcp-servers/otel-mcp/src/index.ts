@@ -1,5 +1,4 @@
-import { Module, Tool, Resource, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, ResourceDecorator as Resource, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import axios from 'axios';
 
@@ -68,14 +67,25 @@ export class OTelService {
   }
 }
 
-@Module({ providers: [OTelService] })
+@McpApp({ module: OTelServer, server: { name: 'otel-mcp', version: '1.0.0' } })
+@Module({ 
+  name: 'otel', 
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
+  providers: [OTelService] 
+})
 export class OTelServer {
   constructor(private readonly otelService: OTelService) {}
 
   @Tool({
     name: 'get_trace_spans',
     description: 'Filter spans by trace ID to extract root-cause error details from Grafana Tempo',
-    schema: z.object({
+    inputSchema: z.object({
       trace_id: z.string(),
       filter_status: z.enum(['ALL', 'ERROR']).default('ERROR')
     })
@@ -88,13 +98,14 @@ export class OTelServer {
   @Tool({
     name: 'get_service_dependency_graph',
     description: 'Maps upstream callers and downstream targets involved in a failed transaction',
-    schema: z.object({ trace_id: z.string() })
+    inputSchema: z.object({ trace_id: z.string() })
   })
   async getServiceDependencyGraph(args: { trace_id: string }) {
     return await this.otelService.fetchServiceDependencyGraph(args.trace_id);
   }
 
   @Resource({
+    name: 'trace_waterfall',
     uri: 'otel://traces/{trace_id}/waterfall',
     description: 'Structural JSON representation of the entire microservice call hierarchy'
   })
@@ -103,4 +114,8 @@ export class OTelServer {
   }
 }
 
-NitroStack.start(OTelServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(OTelServer);
+  await server.start();
+}
+bootstrap().catch(console.error);

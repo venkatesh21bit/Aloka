@@ -1,5 +1,4 @@
-import { Module, Tool, Resource, Injectable, NitroStack } from '@nitrostack/core';
-import { z } from 'zod';
+import { Module, ToolDecorator as Tool, ResourceDecorator as Resource, Injectable, McpApp, McpApplicationFactory, z, OAuthModule } from '@nitrostack/core';
 import { Sanitizer } from '@omnitrace/sanitizer';
 import { Octokit } from '@octokit/rest';
 
@@ -64,7 +63,16 @@ export class CIService {
   }
 }
 
+@McpApp({ module: CIServer, server: { name: 'ci-mcp', version: '1.0.0' } })
 @Module({
+  name: 'ci',
+  imports: [
+    OAuthModule.forRoot({
+      resourceUri: 'http://localhost:3000',
+      authorizationServers: ['http://localhost:3000'],
+      required: false
+    })
+  ],
   providers: [CIService]
 })
 export class CIServer {
@@ -73,7 +81,7 @@ export class CIServer {
   @Tool({
     name: 'get_failed_job_logs',
     description: 'Fetch log output for a failed CI job run',
-    schema: z.object({
+    inputSchema: z.object({
       owner: z.string(),
       repo: z.string(),
       job_id: z.string(),
@@ -89,13 +97,14 @@ export class CIServer {
   @Tool({
     name: 'get_pipeline_context',
     description: 'Returns metadata associated with the build failure',
-    schema: z.object({ owner: z.string(), repo: z.string(), run_id: z.string() })
+    inputSchema: z.object({ owner: z.string(), repo: z.string(), run_id: z.string() })
   })
   async getPipelineContext(args: { owner: string, repo: string, run_id: string }) {
     return await this.ciService.fetchPipelineContext(args.owner, args.repo, args.run_id);
   }
 
   @Resource({
+    name: 'raw_logs',
     uri: 'ci://{owner}/{repo}/pipeline/{run_id}/raw-logs',
     description: 'Read-only stream containing unredacted raw build logs'
   })
@@ -106,4 +115,8 @@ export class CIServer {
   }
 }
 
-NitroStack.start(CIServer);
+async function bootstrap() {
+  const server = await McpApplicationFactory.create(CIServer);
+  await server.start();
+}
+bootstrap().catch(console.error);
