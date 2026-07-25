@@ -10,18 +10,27 @@ webhookRouter.post('/github', async (req, res) => {
     const payload = WebhookPayloadSchema.parse(req.body);
     logger.info(`Received webhook for ${payload.repository_url}`);
 
+    // Acknowledge the webhook immediately so GitHub Actions (or curl) doesn't hang
+    res.status(202).json({ message: 'Incident processing started in the background' });
+
     const graph = createGraph();
-    const finalState = await graph.invoke({
+    // Execute the graph asynchronously
+    graph.invoke({
       status: 'DIAGNOSING',
       pipelineContext: {
         repository_url: payload.repository_url,
-        branch_name: payload.branch_name,
-        commit_sha: payload.commit_sha,
-        failing_job_id: payload.failing_job_id
+        branch_name:    payload.branch_name,
+        commit_sha:     payload.commit_sha,
+        failing_job_id: payload.failing_job_id,
+        run_id:         payload.run_id,
+        owner:          payload.owner,
+        repo:           payload.repo,
       }
+    }).then(finalState => {
+      logger.info('Incident processed successfully');
+    }).catch(err => {
+      logger.error({ err }, 'Background graph execution failed');
     });
-
-    res.json({ message: 'Incident processed successfully', finalState });
   } catch (err) {
     logger.error({ err }, 'Webhook processing failed');
     res.status(400).json({ error: 'Invalid payload' });

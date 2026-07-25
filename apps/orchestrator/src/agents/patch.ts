@@ -1,63 +1,171 @@
-import { StateAnnotation } from '../graph/state';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { StateAnnotation } from '../graph/state.js';
+
+// ─── MCP client helpers ───────────────────────────────────────────────────────
+
+async function callGitMcpTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args:    [process.env.GIT_MCP_PATH ?? 'packages/mcp-servers/git-mcp/dist/index.js'],
+    env:     { ...process.env } as Record<string, string>,
+  });
+  const client = new Client({ name: 'orchestrator', version: '1.0.0' });
+  await client.connect(transport);
+  try {
+    const result  = await client.callTool({ name: toolName, arguments: args });
+    const content = result.content as Array<{ type: string; text?: string }>;
+    return content.find(c => c.type === 'text')?.text ?? '';
+  } finally {
+    await client.close();
+  }
+}
+
+// ─── SEARCH/REPLACE block application (port of kassi/remediate.py) ───────────
+
+interface EditBlock { search: string; replace: string }
+
+/**
+ * Parse SEARCH/REPLACE blocks from model output.
+ * Port of kassi's remediate.parse_blocks().
+ */
+function parseBlocks(text: string): EditBlock[] {
+  const BLOCK = /<{5,}\s*SEARCH\s*\n([\s\S]*?)\n={5,}\s*\n([\s\S]*?)\n>{5,}\s*REPLACE/g;
+  const blocks: EditBlock[] = [];
+  const cleaned = text.replace(/```/g, '');
+  let m: RegExpExecArray | null;
+  while ((m = BLOCK.exec(cleaned)) !== null) {
+    blocks.push({ search: m[1], replace: m[2] });
+  }
+  return blocks;
+}
+
+async function callSlackMcpTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args:    [process.env.SLACK_MCP_PATH ?? 'packages/mcp-servers/slack-mcp/dist/index.js'],
+    env:     { ...process.env } as Record<string, string>,
+  });
+  const client = new Client({ name: 'orchestrator', version: '1.0.0' });
+  await client.connect(transport);
+  try {
+    const result  = await client.callTool({ name: toolName, arguments: args });
+    const content = result.content as Array<{ type: string; text?: string }>;
+    return content.find(c => c.type === 'text')?.text ?? '';
+  } finally {
+    await client.close();
+  }
+}
+
+// ─── patchAgent ───────────────────────────────────────────────────────────────
 
 export async function patchAgent(state: typeof StateAnnotation.State) {
-  console.log(`[Patch Synthesizer] Generating patch for ${state.traceId}`);
-  
-  let patchDiff = '';
+  const ctx = state.pipelineContext;
+  console.log(`[Patch Synthesizer] Generating patch grounded on GraphRAG context`);
+
+  // Determine which file to fix
+  const targetFile = state.suggestedFiles?.[0];
+  let fileContent  = '';
+
+  if (targetFile && ctx?.owner && ctx?.repo && ctx?.commit_sha) {
+    try {
+      console.log(`[Patch Synthesizer] Reading ${targetFile} via git-mcp`);
+      fileContent = await callGitMcpTool('read_file_at_commit', {
+        repo:   `${ctx.owner}/${ctx.repo}`,
+        commit: ctx.commit_sha,
+        path:   targetFile,
+      });
+    } catch (err: any) {
+      console.warn(`[Patch Synthesizer] git-mcp read failed: ${err.message}`);
+    }
+  }
+
+  let patchDiff  = '';
   let rcaSummary = '';
 
   try {
     const model = new ChatGoogleGenerativeAI({
-      modelName: 'gemini-3-flash-preview',
-      apiKey: process.env.GEMINI_API_KEY
+      model:  'gemini-3-flash-preview',
+      apiKey: process.env.GEMINI_API_KEY,
     });
 
+    // Ground the prompt on the GraphRAG context and the actual file content.
+    // The SEARCH/REPLACE format mirrors kassi/remediate.py's SEARCH_REPLACE_SYSTEM.
     const prompt = `
-You are an expert CI/CD AI agent debugging a build failure.
-Analyze the following logs, trace spans, and DOM errors to determine the root cause and write a patch.
+You are an expert SRE proposing the smallest code fix for a CI pipeline failure.
+Ground every claim strictly in the provided context — never invent file paths, line numbers, or error messages.
 
-Job Logs:
-${state.jobLogs}
+CI Failure Context (graph-grounded, do not invent anything beyond this):
+${state.ciGraphContext || state.jobLogs || 'No context available'}
 
-Trace Spans:
-${state.traceSpans}
+${fileContent ? `Current file (${targetFile}):\n${fileContent}` : ''}
 
-DOM Errors:
-${state.domErrors}
-
-Provide your response in exactly the following JSON format:
+Provide your response in exactly this JSON format:
 {
-  "rcaSummary": "Short explanation of the root cause",
-  "patchDiff": "--- a/path/to/file\n+++ b/path/to/file\n- old code\n+ new code"
+  "rcaSummary": "One-paragraph root cause analysis citing the failing step and error category",
+  "targetFile": "The exact path of the file that needs to be fixed. If the fix belongs in a different file than the 'Current file' provided above (e.g. backend/requirements.txt), specify that path here.",
+  "patchedFileContent": "The complete, fully-patched content of the target file. Do not use diffs or blocks, output the entire updated file."
 }
-    `;
+
+Rules:
+- Keep the change minimal. Do not remove error handling or comments.
+- If you need to fix a file that was not provided in the 'Current file', you MUST still output its full, correct content from scratch.
+- If no fix is possible, set patchedFileContent to an empty string and explain in rcaSummary.
+- No prose outside the JSON object.
+`.trim();
 
     const response = await model.invoke(prompt);
-    
-    // Parse the JSON output from the model
-    const content = response.content.toString();
+    const content  = response.content.toString();
+
+    // Try to parse structured JSON response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      patchDiff = parsed.patchDiff || 'No diff generated';
-      rcaSummary = parsed.rcaSummary || 'No RCA summary generated';
+      rcaSummary = parsed.rcaSummary ?? '';
+
+      if (parsed.patchedFileContent && parsed.targetFile) {
+        patchDiff = parsed.patchedFileContent;
+        // Override suggested files with the LLM's chosen target file
+        state.suggestedFiles = [parsed.targetFile];
+        console.log(`[Patch Synthesizer] Generated full patched file content for ${parsed.targetFile}`);
+      } else {
+        patchDiff = `[NOTE] No file content generated. RCA: ${rcaSummary}`;
+      }
     } else {
-      patchDiff = 'Error parsing diff';
-      rcaSummary = 'Error parsing RCA';
+      rcaSummary = 'Error parsing LLM response';
+      patchDiff  = 'Error parsing diff';
     }
   } catch (error: any) {
     console.error('[Patch Synthesizer] LLM Error:', error);
-    patchDiff = `LLM Failed: ${error.message}`;
+    patchDiff  = `LLM Failed: ${error.message}`;
     rcaSummary = 'Failed to synthesize patch due to LLM error.';
   }
 
-  console.log(`[Patch Synthesizer] Invoking slack-mcp to ask for human approval`);
+  console.log(`[Patch Synthesizer] Patch ready. Sending to Slack.`);
+
+  let slackThreadId = 'slack-thread-123';
+  const channelId = process.env.SLACK_CHANNEL_ID;
+  if (channelId) {
+    try {
+      const slackResult = await callSlackMcpTool('post_interactive_alert', {
+        channel_id: channelId,
+        rca_summary: rcaSummary,
+        diff_patch: patchDiff,
+        action_buttons: ['Approve', 'Reject']
+      });
+      console.log(`[Patch Synthesizer] Slack: ${slackResult}`);
+      const match = slackResult.match(/Thread ID:\s*(\S+)/);
+      if (match) slackThreadId = match[1];
+    } catch (err: any) {
+      console.warn(`[Patch Synthesizer] Slack MCP call failed: ${err.message}`);
+    }
+  }
 
   return {
-    status: 'APPROVED' as const, // In a real system, this would wait for Slack webhook callback. We auto-approve for now.
+    status:       'APPROVED' as const, // In production, wait for Slack webhook callback
     patchDiff,
     rcaSummary,
-    slackThreadId: 'slack-thread-123'
+    slackThreadId,
   };
 }

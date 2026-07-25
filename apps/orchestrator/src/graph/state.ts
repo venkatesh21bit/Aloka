@@ -8,9 +8,23 @@ export const StateAnnotation = Annotation.Root({
     default: () => 'PENDING'
   }),
   pipelineContext: Annotation<GraphState['pipelineContext']>({
-    reducer: (curr, next) => ({ ...curr, ...next }),
+    reducer: (curr, next) => (next ? { ...(curr || {}), ...next } as any : curr),
     default: () => undefined
   }),
+  // ── ci-mcp GraphRAG outputs (populated by diagnosticAgent) ─────────────────
+  ciGraphContext: Annotation<string>({
+    reducer: (curr, next) => next || curr,
+    default: () => ''
+  }),
+  suggestedFiles: Annotation<string[]>({
+    reducer: (curr, next) => (next && next.length ? next : curr),
+    default: () => []
+  }),
+  ciErrors: Annotation<string>({
+    reducer: (curr, next) => next || curr,
+    default: () => ''
+  }),
+  // ── Existing fields ─────────────────────────────────────────────────────────
   jobLogs: Annotation<string>({
     reducer: (curr, next) => next || curr,
     default: () => ''

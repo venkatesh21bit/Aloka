@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { logger } from '@omnitrace/logger';
 import { webhookRouter } from './webhooks';
