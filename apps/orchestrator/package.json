@@ -6,6 +6,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@omnitrace/logger": "workspace:*",
     "@langchain/core": "^1.2.3",
     "@langchain/google-genai": "^2.2.0",
     "@langchain/langgraph": "^1.4.8",
