@@ -1,5 +1,5 @@
 {
-  "name": "@omnitrace/ci-mcp",
+  "name": "@omnitrace/k8s-test-mcp",
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {

@@ -1,12 +1,11 @@
 {
-  "name": "@omnitrace/ci-mcp",
+  "name": "@omnitrace/schemas",
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc"
   },
   "dependencies": {
-    "@nitrostack/core": "^1.0.14",
     "zod": "^4.4.3"
   }
 }

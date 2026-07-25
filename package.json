@@ -1,0 +1,19 @@
+{
+  "name": "omnitrace",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "turbo": "latest",
+    "typescript": "^7.0.2"
+  }
+}
