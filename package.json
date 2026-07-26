@@ -6,13 +6,17 @@
     "node": ">=18"
   },
   "scripts": {
-    "prebuild": "npm install -g pnpm && pnpm install",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "start": "cd apps/orchestrator && node dist/index.js"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/shared/*",
+    "packages/mcp-servers/*"
+  ],
   "devDependencies": {
     "@types/node": "^26.1.1",
     "turbo": "latest",
