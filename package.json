@@ -6,6 +6,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "prebuild": "npm install -g pnpm && pnpm install",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
