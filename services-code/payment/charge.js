@@ -27,6 +27,10 @@ module.exports.charge = async request => {
   const span = tracer.startSpan('charge');
 
   try {
+    // Induced intentional error for CI/CD pipeline diagnostics test
+    logger.error({ errorCode: 'PAYMENT_GATEWAY_TIMEOUT' }, 'Failed to connect to upstream payment gateway');
+    throw new Error('PaymentGatewayError: Connection timeout to upstream payment provider (504)');
+
     const baggage = propagation.getBaggage(context.active());
     const syntheticRequest = baggage?.getEntry('synthetic_request')?.value === 'true';
 

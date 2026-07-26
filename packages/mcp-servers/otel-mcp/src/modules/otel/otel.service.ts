@@ -98,6 +98,10 @@ export class OTelService {
     const w3cMatch = text.match(/traceparent[=:\s"']+00-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}/i);
     if (w3cMatch) return w3cMatch[1].toLowerCase();
 
+    // Docker Compose OTel log format: "service  |   traceId: '32hex'"
+    const dockerMatch = text.match(/traceId:\s*['"]([0-9a-f]{32})['"]/i);
+    if (dockerMatch) return dockerMatch[1].toLowerCase();
+
     // B3 / Zipkin X-B3-TraceId: 64-bit (16 hex) or 128-bit (32 hex)
     const b3Match = text.match(/(?:x-b3-traceid|traceId)[=:\s"']+([0-9a-f]{16,32})/i);
     if (b3Match) return b3Match[1].toLowerCase().padStart(32, '0');
@@ -122,9 +126,22 @@ export class OTelService {
       return `[ERROR] OTel log file not found: ${logFilePath}`;
     }
 
-    const raw = fs.readFileSync(logFilePath, 'utf-8');
+    const bomBytes = fs.readFileSync(logFilePath).slice(0, 2);
+    const encoding: BufferEncoding =
+      (bomBytes[0] === 0xFF && bomBytes[1] === 0xFE) ||
+      (bomBytes[0] === 0xFE && bomBytes[1] === 0xFF)
+        ? 'utf16le' : 'utf8';
+    const raw = fs.readFileSync(logFilePath, encoding).replace(/^\uFEFF/, ''); // strip BOM
     const lines = raw.split(/\r?\n/).filter(Boolean);
     const spans: ParsedSpan[] = [];
+
+    // ── Format 3: Docker Compose multi-line log ───────────────────────────────
+    // Lines look like: "service  |   traceId: '282cab...'" spanning multiple lines per record.
+    // Detect by checking if the file contains this pattern.
+    const isDockerComposeFmt = lines.some(l => /^\S.*\s+\|\s+/.test(l));
+    if (isDockerComposeFmt) {
+      return this._parseDockerComposeLog(lines, traceId);
+    }
 
     for (const line of lines) {
       try {
@@ -213,6 +230,95 @@ export class OTelService {
       if (m) return m[1].replace(/^["']|["']$/g, '');
     }
     return '';
+  }
+
+  /**
+   * Parse Docker Compose multi-line OTel log format.
+   * Each record is a JS object printed across ~40 lines, prefixed with "service  |".
+   * We group consecutive lines into records delimited by the top-level `{` / `}` pair,
+   * then extract fields with regex.
+   */
+  private _parseDockerComposeLog(lines: string[], traceId: string): string {
+    // Strip prefix: "payment  |   traceId: ..." → "  traceId: ..."
+    const stripped = lines.map(l => l.replace(/^\S[\w-]*\s*\|\s?/, ''));
+
+    // Group into records by top-level { ... }
+    const records: string[][] = [];
+    let current: string[] = [];
+    let depth = 0;
+    for (const line of stripped) {
+      const opens  = (line.match(/\{/g) ?? []).length;
+      const closes = (line.match(/\}/g) ?? []).length;
+      if (depth === 0 && opens > 0) {
+        current = [line];
+        depth += opens - closes;
+        if (depth === 0) { records.push(current); current = []; }
+      } else if (depth > 0) {
+        current.push(line);
+        depth += opens - closes;
+        if (depth <= 0) { records.push(current); current = []; depth = 0; }
+      }
+    }
+
+    // Filter records matching traceId
+    const targetId = traceId.replace(/-/g, '').toLowerCase();
+    const matched = records.filter(r =>
+      r.some(l => {
+        const m = l.match(/traceId:\s*['"]([0-9a-f]{32})['"]/);
+        return m && m[1].toLowerCase() === targetId;
+      })
+    );
+
+    if (matched.length === 0) {
+      return `[INFO] No log records found for traceId=${traceId}`;
+    }
+
+    // Extract fields from each matched record block
+    const getField = (block: string[], ...keys: string[]): string => {
+      for (const key of keys) {
+        for (const line of block) {
+          const m = line.match(new RegExp(`${key}:\\s*['"]?([^,'"\\n{}\\[\\]]+)['"]?`));
+          if (m) return m[1].trim();
+        }
+      }
+      return '';
+    };
+
+    const spans: Array<{
+      traceId: string; spanId: string; severity: string;
+      body: string; service: string;
+    }> = matched.map(block => ({
+      traceId:  getField(block, 'traceId'),
+      spanId:   getField(block, 'spanId'),
+      severity: getField(block, 'severityText'),
+      body:     getField(block, 'body'),
+      service:  getField(block, "'service\\.name'", 'service\.name'),
+    }));
+
+    const errors = spans.filter(s =>
+      s.severity === 'error' || s.severity === 'ERROR' || s.severity === 'warn'
+    );
+
+    const out: string[] = [
+      `## OTel Trace Summary (Docker Compose logs)`,
+      `Trace ID : ${traceId}`,
+      `Matching log records: ${spans.length}  |  Error/Warn records: ${errors.length}`,
+      '',
+      `### Log Records`,
+    ];
+
+    (errors.length ? errors : spans).slice(0, 20).forEach(s => {
+      out.push(`- [${s.service || 'unknown'}] ${s.body} | spanId=${s.spanId} severity=${s.severity}`);
+    });
+
+    out.push('', '### All Messages');
+    spans.slice(0, 30).forEach(s => {
+      out.push(`  • [${s.severity}] ${s.body}`);
+    });
+
+    const result = out.join('\n');
+    const trimmed = result.length > 3800 ? result.substring(0, 3800) + '\n...[truncated]' : result;
+    return Sanitizer.scrub(trimmed);
   }
 }
 
