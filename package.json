@@ -1,5 +1,6 @@
 {
   "name": "omnitrace",
+  "version": "1.0.0",
   "private": true,
   "engines": {
     "node": ">=18"
@@ -18,9 +19,5 @@
   ],
   "dependencies": {
     "turbo": "^2.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^26.1.1",
-    "typescript": "^5.0.0"
   }
 }
