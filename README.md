@@ -127,71 +127,33 @@ Point your MCP client at the endpoint above to try it instantly. Prefer a hosted
 
 ### Prerequisites
 
-- Node.js 18+
-- pnpm (or npm)
-- Docker (optional, for local PostgreSQL checkpointer)
 - An MCP-compatible client (Claude Desktop, Cursor, etc.)
 
-### Installation
+### Connect via Nitrostack (Recommended)
+
+Since Aloka is deployed on Nitrostack Cloud, you don't need to run it locally. Simply point your MCP client to the live cloud endpoint:
+
+```json
+{
+  "mcpServers": {
+    "aloka-cloud": {
+      "url": "https://aloka-6a65676a-dempsey-squad-amrita-university-coimbatore.app.nitrocloud.ai"
+    }
+  }
+}
+```
+
+### Run Locally (Optional for Development)
+
+If you wish to contribute to Aloka, you can run the orchestrator and all MCP servers locally:
 
 ```bash
 git clone https://github.com/venkatesh21bit/Aloka.git
 cd Aloka
-pnpm install
+npm install
 ```
 
-### Configuration
-
-Copy the example environment file and configure your service credentials:
-
-```bash
-cp .env.example apps/orchestrator/.env
-```
-
-Configure your key integration variables in `apps/orchestrator/.env`:
-
-```env
-# GitHub Integration
-GITHUB_TOKEN=your_github_personal_access_token
-
-# Slack ChatOps
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-
-# Jira Issue Tracking
-JIRA_URL=https://your-domain.atlassian.net
-JIRA_EMAIL=your_email@domain.com
-JIRA_API_TOKEN=your_jira_api_token
-
-# OpenTelemetry / Tempo
-TEMPO_URL=http://localhost:3200
-OTEL_LOG_FILE=/path/to/otel-traces.txt
-
-# LLM Provider
-GEMINI_API_KEY=your_gemini_api_key
-
-# PostgreSQL Checkpointer
-POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/omnitrace
-```
-
-### Run Locally
-
-**1. Start local PostgreSQL checkpointer:**
-```bash
-docker-compose up -d
-```
-
-**2. Build all workspaces:**
-```bash
-pnpm run build
-```
-
-**3. Launch the Orchestrator:**
-```bash
-cd apps/orchestrator
-node dist/index.js
-```
-
-The orchestrator will listen on port `3000` (or `process.env.PORT`) with endpoints for `/webhooks/github` and `/webhooks/slack/interactivity`.
+Configure your environment variables in `.env` (refer to `.env.example`), start PostgreSQL via `docker-compose up -d`, and run `npm run start` to boot the orchestrator.
 
 ---
 
