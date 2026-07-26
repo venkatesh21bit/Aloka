@@ -6,7 +6,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "echo Pre-built dist committed, nothing to compile",
+    "build": "npm install --legacy-peer-deps && echo Pre-built dist committed, nothing to compile",
     "dev": "npx turbo run dev",
     "lint": "npx turbo run lint",
     "test": "npx turbo run test",
