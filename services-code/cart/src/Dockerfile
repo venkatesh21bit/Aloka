@@ -20,12 +20,13 @@ ARG TARGETARCH
 
 WORKDIR /usr/src/app/
 
-COPY ./src/cart/ ./
+COPY ./services-code/cart/src/ ./
+COPY ./services-code/cart/*.props ./
 COPY ./pb/ ./pb/
 
-RUN dotnet restore ./src/cart.csproj -r linux-musl-$TARGETARCH
+RUN dotnet restore ./cart.csproj -r linux-musl-$TARGETARCH
 
-RUN dotnet publish ./src/cart.csproj -r linux-musl-$TARGETARCH --no-restore -o /cart
+RUN dotnet publish ./cart.csproj -r linux-musl-$TARGETARCH --no-restore -o /cart
 
 # -----------------------------------------------------------------------------
 

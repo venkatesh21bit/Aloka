@@ -1,8 +1,10 @@
 import { ToolDecorator as Tool, z } from '@nitrostack/core';
 import { IssueService } from './issue.service.js';
 
+const issueService = new IssueService();
+
 export class IssueTools {
-  constructor(private readonly issueService: IssueService) {}
+  constructor() {}
 
   @Tool({
     name: 'create_or_update_issue',
@@ -16,6 +18,6 @@ export class IssueTools {
     })
   })
   async createOrUpdateIssue(args: { project_key: string, title: string, description: string, priority?: 'P0' | 'P1' | 'P2', trace_id?: string }) {
-    return await this.issueService.createOrUpdate(args.project_key, args.title, args.description, args.priority, args.trace_id);
+    return await issueService.createOrUpdate(args.project_key, args.title, args.description, args.priority, args.trace_id);
   }
 }

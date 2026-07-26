@@ -150,7 +150,7 @@ Rules:
     try {
       const slackResult = await callSlackMcpTool('post_interactive_alert', {
         channel_id: channelId,
-        rca_summary: rcaSummary,
+        rca_summary: `*Run ID:* ${ctx?.run_id || 'unknown'}\n\n${rcaSummary}`,
         diff_patch: patchDiff,
         action_buttons: ['Approve', 'Reject']
       });
@@ -163,9 +163,10 @@ Rules:
   }
 
   return {
-    status:       'APPROVED' as const, // In production, wait for Slack webhook callback
+    status:       'PENDING_APPROVAL' as const, // Halts execution, waits for Slack webhook
     patchDiff,
     rcaSummary,
     slackThreadId,
+    suggestedFiles: state.suggestedFiles,
   };
 }

@@ -6,8 +6,8 @@ FROM docker.io/library/node:26.4.0-slim@sha256:a1d9d671994fc2d26e297ac56b4b1522a
 
 WORKDIR /usr/src/app/
 
-COPY ./src/payment/package.json package.json
-COPY ./src/payment/package-lock.json package-lock.json
+COPY ./services-code/payment/package.json package.json
+COPY ./services-code/payment/package-lock.json package-lock.json
 
 RUN npm ci --omit=dev
 
@@ -21,9 +21,9 @@ COPY --from=builder /usr/src/app/node_modules/ node_modules/
 
 COPY ./pb/demo.proto demo.proto
 
-COPY ./src/payment/charge.js charge.js
-COPY ./src/payment/index.js index.js
-COPY ./src/payment/logger.js logger.js
+COPY ./services-code/payment/charge.js charge.js
+COPY ./services-code/payment/index.js index.js
+COPY ./services-code/payment/logger.js logger.js
 
 EXPOSE ${PAYMENT_PORT}
 

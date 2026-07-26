@@ -1,5 +1,5 @@
 export interface GraphState {
-  status: 'PENDING' | 'DIAGNOSING' | 'PATCHING' | 'APPROVED' | 'VERIFYING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'DIAGNOSING' | 'PATCHING' | 'PENDING_APPROVAL' | 'APPROVED' | 'VERIFYING' | 'COMPLETED' | 'FAILED';
   pipelineContext?: {
     repository_url: string;
     branch_name:    string;

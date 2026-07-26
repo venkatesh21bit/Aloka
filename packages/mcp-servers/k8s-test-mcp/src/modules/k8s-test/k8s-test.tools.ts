@@ -1,8 +1,10 @@
 import { ToolDecorator as Tool, z } from '@nitrostack/core';
 import { K8sTestService } from './k8s-test.service.js';
 
+const k8sTestService = new K8sTestService();
+
 export class K8sTestTools {
-  constructor(private readonly k8sTestService: K8sTestService) {}
+  constructor() {}
 
   @Tool({
     name: 'run_ephemeral_test_suite',
@@ -14,7 +16,7 @@ export class K8sTestTools {
     })
   })
   async runEphemeralTestSuite(args: { suite_name: string, patch_diff: string, target_namespace: string }) {
-    return await this.k8sTestService.runSuite(args.suite_name, args.patch_diff, args.target_namespace);
+    return await k8sTestService.runSuite(args.suite_name, args.patch_diff, args.target_namespace);
   }
 
   @Tool({
@@ -23,6 +25,6 @@ export class K8sTestTools {
     inputSchema: z.object({ run_id: z.string() })
   })
   async getTestExecutionStatus(args: { run_id: string }) {
-    return await this.k8sTestService.getStatus(args.run_id);
+    return await k8sTestService.getStatus(args.run_id);
   }
 }

@@ -39,14 +39,15 @@ export class IssueService {
             project: { key: project },
             summary: title,
             description: descriptionText,
-            issuetype: { name: 'Bug' },
+            issuetype: { name: 'Task' },
             // priority: { name: priority ? priorityMap[priority] : 'Medium' } // Assuming default Jira priorities
           }
         })
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
       const data = await response.json();
       return Sanitizer.scrub(`[SUCCESS] Jira Issue Created: ${data.key}`);

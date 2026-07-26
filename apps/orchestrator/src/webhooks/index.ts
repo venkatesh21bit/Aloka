@@ -6,14 +6,25 @@ import { createGraph } from '../graph';
 export const webhookRouter = express.Router();
 
 webhookRouter.post('/github', async (req, res) => {
+  let payload;
   try {
-    const payload = WebhookPayloadSchema.parse(req.body);
-    logger.info(`Received webhook for ${payload.repository_url}`);
+    payload = WebhookPayloadSchema.parse(req.body);
+  } catch (err) {
+    logger.error({ err }, 'Webhook processing failed - Invalid payload');
+    res.status(400).json({ error: 'Invalid payload' });
+    return;
+  }
 
-    // Acknowledge the webhook immediately so GitHub Actions (or curl) doesn't hang
-    res.status(202).json({ message: 'Incident processing started in the background' });
+  logger.info(`Received webhook for ${payload.repository_url}`);
 
-    const graph = createGraph();
+  // Acknowledge the webhook immediately so GitHub Actions (or curl) doesn't hang
+  res.status(202).json({ message: 'Incident processing started in the background' });
+
+  try {
+    const graph = await createGraph();
+    const threadId = payload.run_id?.toString() || Date.now().toString();
+    const config = { configurable: { thread_id: threadId } };
+    
     // Execute the graph asynchronously
     graph.invoke({
       status: 'DIAGNOSING',
@@ -26,13 +37,64 @@ webhookRouter.post('/github', async (req, res) => {
         owner:          payload.owner,
         repo:           payload.repo,
       }
-    }).then(finalState => {
-      logger.info('Incident processed successfully');
+    }, config).then(finalState => {
+      logger.info(`Incident processed successfully for thread ${threadId}`);
     }).catch(err => {
       logger.error({ err }, 'Background graph execution failed');
     });
   } catch (err) {
-    logger.error({ err }, 'Webhook processing failed');
-    res.status(400).json({ error: 'Invalid payload' });
+    logger.error({ err }, 'Graph initialization failed');
+  }
+});
+
+webhookRouter.post('/slack/interactivity', express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const payload = JSON.parse(req.body.payload);
+    
+    // Acknowledge the interactive request immediately
+    res.status(200).send();
+    
+    if (payload.type === 'block_actions' && payload.actions && payload.actions.length > 0) {
+      const action = payload.actions[0].value || payload.actions[0].text?.text;
+      
+      if (action === 'Approve') {
+        // Extract the Run ID from the original message's blocks
+        let runId = null;
+        for (const block of payload.message.blocks) {
+          if (block.text && block.text.text) {
+            const match = block.text.text.match(/Run ID:\*?\s*(\S+)/);
+            if (match) {
+              runId = match[1];
+              break;
+            }
+          }
+        }
+        
+        if (runId) {
+          logger.info(`Received approval for run ${runId}, resuming graph execution...`);
+          const graph = await createGraph();
+          const config = { configurable: { thread_id: runId } };
+          
+          // Update the state to approved and set the correct slackThreadId
+          await graph.updateState(config, { 
+            status: 'APPROVED',
+            slackThreadId: payload.message.ts
+          });
+          
+          // Resume graph execution
+          graph.invoke(null, config).then(() => {
+            logger.info(`Graph resumed and completed for run ${runId}`);
+          }).catch(err => {
+            logger.error({ err }, 'Graph resume failed');
+          });
+        } else {
+          logger.warn('Could not extract Run ID from Slack message.');
+        }
+      } else {
+        logger.info(`Received action: ${action}, skipping (only Approve triggers PR).`);
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Slack interactivity processing failed');
   }
 });
