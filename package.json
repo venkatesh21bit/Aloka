@@ -1,25 +1,26 @@
 {
   "name": "omnitrace",
   "private": true,
-  "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "start": "cd apps/orchestrator && node dist/index.js"
+    "build": "npx turbo run build",
+    "dev": "npx turbo run dev",
+    "lint": "npx turbo run lint",
+    "test": "npx turbo run test",
+    "start": "node apps/orchestrator/dist/index.js"
   },
   "workspaces": [
     "apps/*",
     "packages/shared/*",
     "packages/mcp-servers/*"
   ],
+  "dependencies": {
+    "turbo": "^2.0.0"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "turbo": "latest",
-    "typescript": "^7.0.2"
+    "typescript": "^5.0.0"
   }
 }
