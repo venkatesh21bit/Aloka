@@ -19,7 +19,7 @@
     "zod": "^4.4.3",
 
 
-    "@omnitrace/sanitizer": "file:../../shared/sanitizer"
+    "@omnitrace/sanitizer": "*"
   },
   "devDependencies": {
     "@nitrostack/cli": "^1.0.15",
