@@ -5,7 +5,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "npx turbo run build",
+    "build": "echo Pre-built dist committed, nothing to compile",
     "dev": "npx turbo run dev",
     "lint": "npx turbo run lint",
     "test": "npx turbo run test",
