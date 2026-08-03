@@ -4,7 +4,7 @@
 
 ![Model Context Protocol](https://img.shields.io/badge/Model%20Context%20Protocol-MCP-blue) ![Built with Nitrostack](https://img.shields.io/badge/Built%20with-Nitrostack-0A66FF) ![Status](https://img.shields.io/badge/status-live-brightgreen)
 
-**Aloka - MCP-Driven GraphRAG for DevOps Diagnostics** is an [MCP (Model Context Protocol)](https://nitrostack.ai) application that extends AI assistants — like Claude, Cursor, and any MCP-compatible client — with real-world DevOps triage, trace correlation, and automated code remediation capabilities. It is built and deployed on [Nitrostack](https://nitrostack.ai), the fastest way to build, deploy, and share MCP apps.
+**Aloka - MCP-Driven GraphRAG for DevOps Diagnostics** is an [MCP (Model Context Protocol)](https://nitrostack.ai) application that extends AI assistants — like Claude, Cursor, and any MCP-compatible client — with real-world DevOps triage, trace correlation, and automated code remediation capabilities.
 
 ---
 
